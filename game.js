@@ -39,7 +39,12 @@ class Terrain {
     }
 
     draw(offsetX) {
-        ctx.fillStyle = '#654321';
+        // Terrain gradient
+        const grad = ctx.createLinearGradient(0,0,0,canvas.height);
+        grad.addColorStop(0, "#8B4513");
+        grad.addColorStop(1, "#654321");
+        ctx.fillStyle = grad;
+        
         ctx.beginPath();
         ctx.moveTo(0, canvas.height);
         for (let i = 0; i < this.points.length; i++) {
@@ -48,17 +53,28 @@ class Terrain {
         ctx.lineTo(canvas.width, canvas.height);
         ctx.closePath();
         ctx.fill();
+
+        // Optional: terrain outline
+        ctx.strokeStyle = "#4d2e1a";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < this.points.length; i++) {
+            if (i === 0) ctx.moveTo(this.points[i].x - offsetX, this.points[i].y);
+            else ctx.lineTo(this.points[i].x - offsetX, this.points[i].y);
+        }
+        ctx.stroke();
     }
 }
 
-// ----- Particle system -----
+// ----- Particles -----
 class Particle {
-    constructor(x, y, color) {
+    constructor(x, y, color, size=3) {
         this.x = x; this.y = y;
         this.vx = (Math.random()-0.5)*3;
         this.vy = -Math.random()*2;
         this.alpha = 1;
         this.color = color;
+        this.size = size;
     }
 
     update() {
@@ -71,7 +87,7 @@ class Particle {
     draw(offsetX) {
         ctx.fillStyle = `rgba(${this.color},${this.alpha})`;
         ctx.beginPath();
-        ctx.arc(this.x - offsetX, this.y, 3, 0, Math.PI*2);
+        ctx.arc(this.x - offsetX, this.y, this.size, 0, Math.PI*2);
         ctx.fill();
     }
 }
@@ -99,15 +115,11 @@ class Bike {
 
     update(keys, terrain) {
         if (!this.crashed) {
-            // ----- Acceleration -----
             if (keys['ArrowRight']) this.vx += this.acceleration;
             if (keys['ArrowLeft']) this.vx -= this.acceleration;
-
-            // ----- Air control -----
             if (keys['ArrowUp']) this.angularVelocity -= this.rotationSpeed;
             if (keys['ArrowDown']) this.angularVelocity += this.rotationSpeed;
 
-            // physics
             this.vy += this.gravity;
             this.vx *= this.friction;
             this.vy *= this.friction;
@@ -118,23 +130,20 @@ class Bike {
             this.y += this.vy;
             this.rotation += this.angularVelocity;
 
-            // ----- Ground collision -----
             const groundY = terrain.getGroundY(this.x) - this.height/2;
             const slope = terrain.getSlope(this.x);
 
             if (this.y > groundY) {
                 if (Math.abs(this.angularVelocity) > 0.5 || Math.abs(this.vy) > 20) {
                     this.crashed = true;
-                    this.vx = 0;
-                    this.vy = 0;
-                    this.angularVelocity = 0;
-                    for (let i = 0; i < 20; i++) particles.push(new Particle(this.x, this.y, "200,200,200"));
+                    this.vx = 0; this.vy = 0; this.angularVelocity = 0;
+                    for (let i=0;i<20;i++) particles.push(new Particle(this.x,this.y,"200,200,200",4));
                 } else {
                     this.y = groundY;
                     this.vy = 0;
                     this.angularVelocity *= 0.5;
                     this.rotation *= 0.7;
-                    for (let i = 0; i < 5; i++) particles.push(new Particle(this.x, this.y + this.height/2, "150,75,0"));
+                    for (let i=0;i<5;i++) particles.push(new Particle(this.x,this.y+this.height/2,"150,75,0",3));
                 }
             }
         }
@@ -145,17 +154,44 @@ class Bike {
         ctx.translate(this.x - offsetX, this.y);
         ctx.rotate(this.rotation);
 
-        // bike body
+        // Detailed bike body
         ctx.fillStyle = this.crashed ? 'gray' : 'red';
         ctx.fillRect(-this.width/2, -this.height/2, this.width, this.height);
 
-        // front/back wheels with suspension effect
-        ctx.fillStyle = 'black';
-        const wheelOffsetY = 10 * Math.sin(Date.now()/100 + this.x*0.01);
+        // Add bike front shield / seat
+        ctx.fillStyle = "#222";
+        ctx.fillRect(10, -this.height/2, 20, 10);
+
+        // Wheels with rotation
+        const wheelOffsetY = 10 * Math.sin(Date.now()/200 + this.x*0.01);
+        ctx.fillStyle = "#333";
+        const wheelRadius = 15;
+        // back wheel
         ctx.beginPath();
-        ctx.arc(-this.width/2 + 20, this.height/2 + wheelOffsetY, 15, 0, Math.PI*2);
-        ctx.arc(this.width/2 - 20, this.height/2 + wheelOffsetY, 15, 0, Math.PI*2);
+        ctx.arc(-this.width/2 + 20, this.height/2 + wheelOffsetY, wheelRadius, 0, Math.PI*2);
         ctx.fill();
+        // front wheel
+        ctx.beginPath();
+        ctx.arc(this.width/2 - 20, this.height/2 + wheelOffsetY, wheelRadius, 0, Math.PI*2);
+        ctx.fill();
+
+        // Wheel spokes for effect
+        ctx.strokeStyle = "#999";
+        ctx.lineWidth = 2;
+        const spokes = 6;
+        for (let i=0;i<spokes;i++){
+            const angle = (i/spokes)*Math.PI*2 + Date.now()/200;
+            ctx.beginPath();
+            ctx.moveTo(-this.width/2 + 20, this.height/2 + wheelOffsetY);
+            ctx.lineTo(-this.width/2 + 20 + wheelRadius*Math.cos(angle),
+                       this.height/2 + wheelOffsetY + wheelRadius*Math.sin(angle));
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(this.width/2 - 20, this.height/2 + wheelOffsetY);
+            ctx.lineTo(this.width/2 - 20 + wheelRadius*Math.cos(angle),
+                       this.height/2 + wheelOffsetY + wheelRadius*Math.sin(angle));
+            ctx.stroke();
+        }
 
         ctx.restore();
     }
@@ -170,22 +206,32 @@ window.addEventListener('keyup', e => keys[e.key] = false);
 const terrain = new Terrain();
 const bike = new Bike(200, canvas.height-200);
 
+// ----- Background -----
+function drawBackground(offsetX) {
+    // simple mountains
+    ctx.fillStyle = "#6B8E23";
+    for (let i=0;i<5;i++){
+        const mx = (i*400 - offsetX*0.5);
+        ctx.beginPath();
+        ctx.moveTo(mx-100, canvas.height-100);
+        ctx.lineTo(mx, canvas.height-300 - i*20);
+        ctx.lineTo(mx+100, canvas.height-100);
+        ctx.fill();
+    }
+}
+
 // ----- Main Loop -----
 function gameLoop() {
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    // ----- Camera -----
     const offsetX = bike.x - 200;
 
-    // ----- Draw terrain -----
+    drawBackground(offsetX);
     terrain.draw(offsetX);
-
-    // ----- Update bike -----
     bike.update(keys, terrain);
     bike.draw(offsetX);
 
-    // ----- Update particles -----
-    for (let i = particles.length-1; i >=0; i--) {
+    for (let i=particles.length-1; i>=0; i--){
         const p = particles[i];
         p.update();
         p.draw(offsetX);
